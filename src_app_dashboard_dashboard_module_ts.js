@@ -2808,6 +2808,14 @@ class CreditCardService {
       headers
     });
   }
+  GetTerminalProviderMachine(filter) {
+    const headers = {
+      Authorization: 'Bearer ' + localStorage.getItem("token")
+    };
+    return this.http.get((0,_utility__WEBPACK_IMPORTED_MODULE_0__.toFilteringUrl)((0,url_join__WEBPACK_IMPORTED_MODULE_2__["default"])(this.appConfig.apiUrl, 'TerminalProviders/GetTerminalProviderMachine'), filter), {
+      headers
+    });
+  }
   GetCards() {
     const headers = {
       Authorization: 'Bearer ' + localStorage.getItem("token")
