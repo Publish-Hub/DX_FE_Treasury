@@ -1085,7 +1085,10 @@ class CreateReconciliationComponent {
     // Collect all checked non-return transactions from rowStates
     const selectedRows = Object.values(this.rowStates).filter(state => state.checked && state.reconcilationIds && !state.isReturn);
     if (!selectedRows.length) return;
-    const cardIds = selectedRows.map(state => state.reconcilationIds);
+    const cardIds = selectedRows.map(state => ({
+      reconcilationIds: state.reconcilationIds,
+      cardCollectionJod: state.cardCollectionJod
+    }));
     const modalRef = this.modalService.open(_components_group_reconciliation_group_reconciliation_component__WEBPACK_IMPORTED_MODULE_1__.GroupReconciliationComponent, {
       size: 'lg'
     });
