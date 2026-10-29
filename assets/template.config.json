@@ -1,5 +1,6 @@
 {
   "production": false,
+  "env": "dev",
   "bypassAuth": true,
   "apiUrl": "https://dxdevmasterold.markaziaapis.com/api",
   "apiUrl2": "https://dxdevtreasury.markaziaapis.com/api",

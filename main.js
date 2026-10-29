@@ -922,6 +922,14 @@ class AppConfigService {
   get portalPageUrl() {
     return this.getValue('portalUrl', '');
   }
+  get env() {
+    return this.getValue('env', '');
+  }
+  // Domain of the SSO cookies written by the Hub, prefixed with env (e.g. .dev.markaziahub.com)
+  get ssoCookieDomain() {
+    const env = this.env;
+    return env ? `.${env}.markaziahub.com` : '.markaziahub.com';
+  }
   get googleMapKey() {
     return this.getValue('googleMapKey', '');
   }
@@ -1474,7 +1482,7 @@ class TokenService {
     parts.push('SameSite=Lax');
     const hostname = location.hostname;
     if (hostname.includes('markaziahub')) {
-      parts.push('Domain=.markaziahub.com');
+      parts.push(`Domain=${this.appConfig.ssoCookieDomain}`);
     }
     if (location.protocol === 'https:') {
       parts.push('Secure');
@@ -1498,17 +1506,28 @@ class TokenService {
     } catch {}
     return null;
   }
+  // Hub cookie names are suffixed with the env from config.json (e.g. MarkaziaAccessToken.dev)
+  get accessCookieName() {
+    return 'MarkaziaAccessToken' + this.cookieEnvSuffix;
+  }
+  get refreshCookieName() {
+    return 'MarkaziaRefreshToken' + this.cookieEnvSuffix;
+  }
+  get cookieEnvSuffix() {
+    const env = this.appConfig.env;
+    return env ? `.${env}` : '';
+  }
   get ssoAccessToken() {
-    return this.readCookieToken('MarkaziaAccessToken');
+    return this.readCookieToken(this.accessCookieName);
   }
   get ssoRefreshToken() {
-    return this.readCookieToken('MarkaziaRefreshToken');
+    return this.readCookieToken(this.refreshCookieName);
   }
   ssoAccessTokenSet(token) {
-    this.writeCookieToken('MarkaziaAccessToken', token);
+    this.writeCookieToken(this.accessCookieName, token);
   }
   ssoRefreshTokenSet(token) {
-    this.writeCookieToken('MarkaziaRefreshToken', token);
+    this.writeCookieToken(this.refreshCookieName, token);
   }
   get isSingleSignOnMode() {
     const localToken = this.readTokenFromStorage();
@@ -1634,8 +1653,8 @@ class TokenService {
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-    this.writeCookieToken('MarkaziaAccessToken', null);
-    this.writeCookieToken('MarkaziaRefreshToken', null);
+    this.writeCookieToken(this.accessCookieName, null);
+    this.writeCookieToken(this.refreshCookieName, null);
   }
   signOut() {
     this.clearTokens();
