@@ -327,7 +327,7 @@ class AuthComponent {
               _this.router.navigateByUrl('/unauthorized');
               return;
             }
-            const id = decoded.nameid ?? decoded.UserID ?? decoded.sid ?? decoded.sub ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/sid'] ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? null;
+            const id = decoded.EmpNo ?? decoded.nameid ?? decoded.UserID ?? decoded.sid ?? decoded.sub ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/sid'] ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? null;
             _this._tokenService.saveUser({
               nameid: id,
               UserID: id,
@@ -502,7 +502,7 @@ function processSsoTokenWithValidation(token, tokenStore, jwtHelper, router, htt
       }
       localStorage.setItem('redirectUrl', redirectUrl);
     }
-    const id = decoded.nameid ?? decoded.UserID ?? decoded.sid ?? decoded.sub ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/sid'] ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? null;
+    const id = decoded.EmpNo ?? decoded.nameid ?? decoded.UserID ?? decoded.sid ?? decoded.sub ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/sid'] ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? null;
     const userData = {
       nameid: id,
       UserID: id,
@@ -597,7 +597,7 @@ function ensureSsoUserSaved(tokenStore, jwtHelper) {
   if (!decoded) {
     return;
   }
-  const id = decoded.nameid ?? decoded.UserID ?? decoded.sid ?? decoded.sub ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/sid'] ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? null;
+  const id = decoded.EmpNo ?? decoded.nameid ?? decoded.UserID ?? decoded.sid ?? decoded.sub ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/sid'] ?? decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ?? null;
   const user = {
     nameid: id,
     UserID: id,
@@ -734,7 +734,7 @@ class JwtInterceptor {
     return next.handle(authedReq).pipe((0,rxjs_operators__WEBPACK_IMPORTED_MODULE_5__.mergeMap)(event => {
       if (event instanceof _angular_common_http__WEBPACK_IMPORTED_MODULE_4__.HttpResponse) {
         const body = event.body;
-        if (event.url?.startsWith(this.getAccessEndpoint) && body?.originalResponse?.Status === true) {
+        if (event.url?.startsWith(this.getAccessEndpoint) && (body?.originalResponse?.Status ?? body?.Status) !== false) {
           this.saveUserFromGetAccess(body);
         }
         if (body?.Status === false && (body?.Error === 'Token has expired' || body?.Message === 'Token has expired')) {
@@ -748,16 +748,18 @@ class JwtInterceptor {
     }), (0,rxjs_operators__WEBPACK_IMPORTED_MODULE_7__.catchError)(err => this.handleError(err, authedReq, next)));
   }
   saveUserFromGetAccess(res) {
-    const data = res?.originalResponse?.Data;
+    // The Hub returns Status as null on success, and without an EmpNo the backend does not add the originalResponse wrapper
+    const data = res?.originalResponse?.Data ?? res?.Data;
     const enhanced = res?.enhancedUserDetails;
     if (!data) return;
-    const id = data.EmployeeID && data.EmployeeID !== 0 ? data.EmployeeID : data.ID && data.ID !== 0 ? data.ID : data.MarkaziaUserID ?? null;
+    // Hub EmpNo is the DX UserID (e.g. 101436); Hub EmployeeID is the UserNo and ID is the Hub's own id
+    const id = data.EmpNo || null;
     const fullName = enhanced?.userDetails?.fullName || [data.FirstName, data.SecondName, data.ThirdName, data.LastName].filter(Boolean).join(' ') || data.Email || '';
     const email = enhanced?.userDetails?.userEmail || data.Email || '';
     this.tokenStore.saveUser({
       nameid: id,
       UserID: id,
-      EmployeeID: data.EmployeeID ?? data.ID ?? null,
+      EmployeeID: id,
       EmpNo: data.EmpNo ?? null,
       Email: email,
       fullName,
@@ -1003,7 +1005,9 @@ class AuthService {
   }
   get userId() {
     const token = this.getDecodedToken();
-    return token ? Number(token.nameid) : localStorage.getItem('userId') ? Number(localStorage.getItem('userId')) : localStorage.getItem('employeeId') ? Number(localStorage.getItem('employeeId')) : null;
+    // A Hub token has EmpNo (the DX UserID) and no nameid
+    const tokenUserId = token?.EmpNo ?? token?.nameid;
+    return tokenUserId ? Number(tokenUserId) : localStorage.getItem('userId') ? Number(localStorage.getItem('userId')) : localStorage.getItem('employeeId') ? Number(localStorage.getItem('employeeId')) : null;
   }
   get getUserRole() {
     return JSON.parse(localStorage.getItem('trole') || 'null');
@@ -1553,7 +1557,8 @@ class TokenService {
     if (employeeCache) {
       try {
         const parsed = JSON.parse(employeeCache);
-        employeeInfo = parsed?.Data ?? null;
+        // GetAccess wraps the Hub response in originalResponse when it returns enhanced details
+        employeeInfo = parsed?.originalResponse?.Data ?? parsed?.Data ?? null;
       } catch {
         console.warn('Invalid employeeData format in localStorage');
       }
@@ -1561,10 +1566,10 @@ class TokenService {
     if (cached) {
       try {
         const obj = JSON.parse(cached);
-        if (employeeInfo?.EmployeeID) {
-          obj.EmployeeID = employeeInfo.EmployeeID;
-          obj.nameid = employeeInfo.EmployeeID;
-          obj.UserID = employeeInfo.EmployeeID;
+        if (employeeInfo?.EmpNo) {
+          obj.EmployeeID = employeeInfo.EmpNo;
+          obj.nameid = employeeInfo.EmpNo;
+          obj.UserID = employeeInfo.EmpNo;
         }
         if (obj.UserID || obj.nameid) return {
           ...obj,
@@ -1592,7 +1597,7 @@ class TokenService {
           branch = typeof p.Branch === 'string' ? JSON.parse(p.Branch) : p.Branch;
         } catch {}
         const fullName = p.fullName ?? p.unique_name ?? p.name ?? p.UserTitleEn ?? p['given_name'] ?? '';
-        const employeeID = employeeInfo?.EmployeeID ?? null;
+        const employeeID = employeeInfo?.EmpNo ?? null;
         return {
           nameid: employeeID ?? id,
           UserID: employeeID ?? id,
@@ -1630,8 +1635,8 @@ class TokenService {
   }
   extractUserId(payload) {
     if (!payload) return null;
-    if (payload.EmployeeID) return String(payload.EmployeeID);
     if (payload.EmpNo) return String(payload.EmpNo);
+    if (payload.EmployeeID) return String(payload.EmployeeID);
     const keys = ['nameid', 'sid', 'sub', 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/sid', 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
     for (const k of keys) {
       if (payload?.[k]) return String(payload[k]);
